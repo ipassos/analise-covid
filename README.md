@@ -6,7 +6,11 @@ Trabalho realizado para a disciplina de Estatística Espacial - Bacharelado em E
 2022/2
 
 Integrantes
-Giovanna 
+
+Giovanna Vidor
+
 Geanine Henriques
+
 Iara Passos
+
 Vitória Garcia
