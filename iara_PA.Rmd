@@ -1,0 +1,92 @@
+---
+title: "Trabalho de Estatística Espacial"
+author: "Iara Passos"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(readr)
+library(dplyr)
+library(DescTools)
+library(glue)
+library(sf)
+library(ggplot2)
+library(ggthemes)
+library(ggiraph)
+library(tidyverse)
+library(viridis)
+library(patchwork)
+library(devtools)
+devtools::install_github("hrbrmstr/albersusa")
+```
+
+## Banco de Dados
+
+```{r, warning=FALSE, message=FALSE}
+dados<-read_csv("cases-brazil-cities-time_2022.csv.gz")
+dados<-dados%>%
+  filter(state=="PA")%>%
+  filter(date>"2022-10-31" & date<"2022-12-01")
+total_casos<-dados%>%
+  group_by(as.character(ibgeID))%>%
+  summarise(casos_total=sum(newCases), city=Mode(city))
+```
+
+```{r, warning=FALSE, message=FALSE}
+shape<-st_read("PA_Municipios_2021.shp")
+shape$nome<-paste(shape$NM_MUN, "/", shape$SIGLA, sep="")
+shape<-shape[,-(1:4)]
+```
+
+```{r, warning=FALSE, message=FALSE}
+total_casos<-total_casos[-1,]
+mapa<-merge(x=shape, y=total_casos, by=intersect('geometry', 'as.character(ibgeID)'))
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+mapa$city[mapa$city=="Pau D'Arco/PA"]<-"Pau dArco/PA"
+mapa$nome[mapa$nome=="Pau D'Arco/PA"]<-"Pau dArco/PA"
+```
+
+```{r, warning=FALSE, message=FALSE}
+mapa$local<-as.data.frame(ifelse(mapa$nome!=mapa$city, NA, mapa$city))
+mapa<-mapa%>%drop_na()
+mapa$texto<-paste(mapa$nome, ":", mapa$casos_total, "casos")
+mapa<-mapa[,-(4:5)]
+```
+
+
+## Mapa
+
+```{r}
+grafico<-ggplot(mapa, 
+                aes(x = reorder(nome, casos_total), 
+                    y = casos_total,
+                    tooltip = texto, data_id = nome)) +
+  geom_col_interactive(color="gray", fill="purple", size=0.5) + 
+  theme_light() +
+  theme(axis.text=element_text(size = 1)) +  #<<
+  labs(title = "Casos de Covid em Novembro de 2022 no PA",
+       subtitle = "Fonte: https://github.com/wcota/covid19br"
+  ) + ylab("") + xlab("") + coord_flip()
+```
+
+```{r}
+mapa<-ggplot(data=mapa, aes(fill=total_casos$casos_total), color="white") +
+  geom_sf_interactive(size = 0.125, aes(data_id = nome, tooltip = nome)) +
+  scale_fill_viridis_c(option="rocket", name="nº de casos", direction=-1) +
+  labs(x=NULL, y=NULL, 
+       title="Pará") + 
+  theme_light()
+
+```
+
+```{r}
+girafe(ggobj = mapa + grafico, 
+       width_svg = 10, height_svg = 5) %>%
+  girafe_options(opts_hover(css = "fill:cyan;"))
+```
+
+

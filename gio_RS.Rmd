@@ -1,0 +1,86 @@
+---
+title: "Estatística Espacial"
+author: "Giovanna Vidor"
+date: "19/01/2023"
+output: html_document
+---
+
+```{r, warning = FALSE, message = FALSE}
+library(readr)
+library(dplyr)
+library(DescTools)
+library(glue)
+library(sf)
+library(ggplot2)
+library(ggthemes)
+library(ggiraph)
+library(tidyverse)
+library(patchwork)
+library(viridis)
+library(devtools)
+library(zoom)
+library(plotly)
+```
+
+```{r, warning = FALSE, message = FALSE}
+dados <- read_csv("cases-brazil-cities-time_2022.csv.gz")
+dados <- dados%>%
+  filter(state == "RS")%>%
+  filter(date > "2022-10-31" & date < "2022-12-01")
+dados$ibgeID <- as.character(dados$ibgeID)
+total_casosRS<-dados%>%
+  group_by(ibgeID)%>%
+  summarise(casos_total = sum(newCases), city = Mode(city))
+total_casosRS
+```
+
+```{r}
+sf <- st_read("RS_Municipios_2021.shx")
+sf
+sf$nome = paste(sf$NM_MUN, "/", sf$SIGLA, sep="")
+sf = sf[,-(1:4)]
+
+mapa <- merge(x = sf, y = total_casosRS, by = intersect("geometry","ibgeID"))
+```
+
+```{r,include=FALSE}
+mapa$city[mapa$city=="Sant'Ana do Livramento/RS"]<-"SantAna do Livramento/RS"
+mapa$nome[mapa$nome=="Sant'Ana do Livramento/RS"]<-"SantAna do Livramento/RS"
+mapa$city <- ifelse(mapa$city != mapa$nome, NA, mapa$city)
+mapa <- mapa%>%drop_na()
+mapa <- mapa[,-1]
+```
+
+```{r}
+mapa$int = paste(mapa$city, ": ", mapa$casos_total, " casos", sep="")
+
+graf = ggplot(mapa, 
+              aes(x = reorder(city, casos_total), 
+                  y = casos_total,
+                  tooltip = int, data_id = city)) +
+              geom_col_interactive(color="darkred", 
+                                     fill="gray", 
+                                     size=0.5) + 
+              theme_calc() +
+              theme(axis.text=element_text(size = 1)) +  #<<
+              labs(title = "Casos de covid em Novembro de 2022 no RS",
+                   subtitle = "Fonte: https://github.com/wcota/covid19br") + 
+              ylab("") + 
+              xlab("") + 
+              coord_flip()
+
+
+rs = ggplot(data = mapa, aes(fill = casos_total), 
+                                 color = "white") +
+         geom_sf_interactive(aes(tooltip = int), 
+                                 size = .2, color = "black") +
+         scale_fill_viridis_c(option = "F", name = "Nº de casos", 
+                              direction = -1) +
+         labs(x=NULL, y=NULL, 
+              title="Mapa dos municípios do RS") +
+         theme_calc()
+
+
+girafe(ggobj = rs + graf,
+       width_svg = 10, height_svg = 5) %>% girafe_options(opts_hover(css = "fill:cyan;"))
+```
